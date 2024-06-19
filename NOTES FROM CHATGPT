@@ -1,0 +1,59 @@
+Certainly! Understanding the architecture of Deep Q Networks (DQNs) is crucial for implementing and effectively using them in reinforcement learning tasks. Let's break down the architecture step-by-step:
+
+### 1. Input Representation:
+
+The input to a DQN is typically the current state \( s \) of the environment. This state representation could vary depending on the problem domain. For example, in a game, it might be pixels from the game screen or a more abstract representation like the positions of game objects.
+
+### 2. Neural Network Layers:
+
+DQNs use a neural network to approximate the action-value function \( Q(s, a; \theta) \), where \( \theta \) represents the parameters of the neural network.
+
+#### a. Input Layer:
+
+- **Input Shape**: The input layer of the neural network takes the state \( s \) as input. The shape of this input depends on how the state is represented (e.g., flattened pixels, or a vector of state variables).
+
+#### b. Hidden Layers:
+
+- **Hidden Layers**: These are typically one or more layers of fully connected (dense) neural network units. The number of hidden layers and the number of neurons in each layer are design choices and can vary based on the complexity of the problem.
+
+- **Activation Function**: ReLU (Rectified Linear Unit) is commonly used as the activation function in hidden layers, but other activation functions like tanh or sigmoid can also be used depending on the specific requirements.
+
+#### c. Output Layer:
+
+- **Output Shape**: The output layer of the neural network has a number of units equal to the number of possible actions in the environment (denoted as \( |\mathcal{A}| \)).
+
+- **Q-Value Output**: Each unit in the output layer represents the estimated Q-value \( Q(s, a; \theta) \) for a specific action \( a \).
+
+- **Activation Function**: Typically, there is no activation function applied directly to the output layer in Q-networks, as we want the network to output the Q-values directly.
+
+### 3. Network Output:
+
+The output of the DQN is a set of Q-values, one for each possible action in the environment. During training, the action with the highest Q-value is selected based on some exploration-exploitation strategy (like ε-greedy policy).
+
+### Key Components of DQN Architecture:
+
+- **Experience Replay**: DQNs use experience replay to improve training efficiency and stability. This involves storing experiences \( (s, a, r, s') \) (state, action, reward, next state) in a replay buffer and sampling mini-batches randomly from this buffer during training.
+
+- **Target Network**: To stabilize training, a target network is used. This is a copy of the main Q-network that is periodically updated with the parameters of the main network. The target network is used to compute the target Q-values \( r + \gamma \max_{a'} Q(s', a'; \theta^-) \) during training, where \( \theta^- \) are the parameters of the target network.
+
+### Training Process:
+
+1. **Initialization**: Initialize the Q-network \( Q(s, a; \theta) \) with random weights, and optionally initialize the target network \( Q(s, a; \theta^-) \) with the same weights.
+
+2. **Interaction with Environment**: For each time step:
+   - Select an action \( a \) based on the current state \( s \) using an exploration strategy.
+   - Execute the action \( a \) in the environment and observe the reward \( r \) and the next state \( s' \).
+
+3. **Experience Replay**: Store the experience \( (s, a, r, s') \) in the replay buffer.
+
+4. **Sample Mini-batch**: Randomly sample a mini-batch of experiences from the replay buffer.
+
+5. **Compute Targets**: For each experience \( (s, a, r, s') \) in the mini-batch, compute the target Q-value \( y = r + \gamma \max_{a'} Q(s', a'; \theta^-) \), where \( \gamma \) is the discount factor.
+
+6. **Update Q-Network**: Update the Q-network parameters \( \theta \) by minimizing the loss between the predicted Q-values \( Q(s, a; \theta) \) and the target Q-values \( y \).
+
+7. **Update Target Network**: Periodically update the target network by copying the weights from the main Q-network.
+
+### Summary:
+
+The architecture of a Deep Q Network (DQN) consists of a neural network that takes a state \( s \) as input and outputs Q-values for each possible action. By training the network to approximate the action-value function \( Q(s, a; \theta) \), DQNs learn to make decisions in a reinforcement learning environment effectively. Key components such as experience replay and target networks are crucial for improving stability and convergence during training.
