@@ -18,7 +18,6 @@ def select_action(steps_done, policy_net, env, state):
     else:
         return torch.tensor([[env.action_space.sample()]], device=device, dtype=torch.long)
 
-
 def optimize_model(memory, policy_net, target_net, optimizer):
     if len(memory) < BATCH_SIZE:
         return

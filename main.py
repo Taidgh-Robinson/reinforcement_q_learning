@@ -40,7 +40,7 @@ episode_durations = []
 if torch.cuda.is_available() or torch.backends.mps.is_available():
     num_episodes = 600
 else:
-    num_episodes = 50
+    num_episodes = 550
 
 for i_episode in range(num_episodes):
     # Initialize the environment and get its state
@@ -79,6 +79,10 @@ for i_episode in range(num_episodes):
             episode_durations.append(t + 1)
             plot_durations(episode_durations, is_ipython)
             break
+
+
+torch.save(target_net.state_dict(), 'target_net.pth')
+torch.save(policy_net.state_dict(), 'policy_net.pth')
 
 print('Complete')
 plot_durations(episode_durations, is_ipython, show_result=True)
