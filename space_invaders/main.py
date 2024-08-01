@@ -21,7 +21,7 @@ from common_files.objects import ReplayMemory, Transition
 from common_files.plot_helper_functions import plot_durations
 from common_files.variables import device, is_ipython, TAU, LR
 from common_files.model_helper_functions import select_action, optimize_model
-
+from common_files.image_helper_functions import preprocess_image
 
 def run_game_random():
     env = gym.make("ALE/SpaceInvaders-v5", render_mode="rgb_array")
@@ -143,4 +143,7 @@ def train():
 
 #create_gif_from_images("C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data", "C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data\\gif8.gif", 320)
 #run_game_random()
-train()
+#train()
+env = gym.make("ALE/SpaceInvaders-v5")
+state, info = env.reset()
+preprocess_image(state)
