@@ -2,8 +2,8 @@ import math
 import random
 import torch.nn as nn
 
-from variables import * 
-from objects import Transition
+from .variables import * 
+from .objects import Transition
 
 
 #Epsilon Greedy Selection

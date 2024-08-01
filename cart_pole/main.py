@@ -9,14 +9,14 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-from models import DQN
-from objects import ReplayMemory, Transition
-from plot_helper_functions import plot_durations
-from variables import device, is_ipython, TAU, LR
-from model_helper_functions import select_action, optimize_model
+from .models import DQN
+from common_files.objects import ReplayMemory, Transition
+from common_files.plot_helper_functions import plot_durations
+from common_files.variables import device, is_ipython, TAU, LR
+from common_files.model_helper_functions import select_action, optimize_model
 
 env = gym.make("CartPole-v1")
-
+print("HERE WE GO TAIDGH!")
 plt.ion()
 
 
@@ -75,8 +75,8 @@ for i_episode in range(num_episodes):
             target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
         target_net.load_state_dict(target_net_state_dict)
         if i_episode % 10 == 0:
-            torch.save(target_net.state_dict(), 'models/target_net_' + str(i_episode) +'.pth')
-            torch.save(policy_net.state_dict(), 'models/policy_net_' + str(i_episode) +'.pth')
+            torch.save(target_net.state_dict(), 'cart_pole/models/target_net_' + str(i_episode) +'.pth')
+            torch.save(policy_net.state_dict(), 'cart_pole/models/policy_net_' + str(i_episode) +'.pth')
 
         if done:
             episode_durations.append(t + 1)

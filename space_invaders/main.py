@@ -4,8 +4,8 @@ from IPython.display import clear_output
 from IPython import display
 from PIL import Image
 import os
-
 import gymnasium as gym
+
 import random
 import matplotlib
 import matplotlib.pyplot as plt
@@ -16,11 +16,11 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-from models import DQN
-from objects import ReplayMemory, Transition
-from plot_helper_functions import plot_durations
-from variables import device, is_ipython, TAU, LR
-from model_helper_functions import select_action, optimize_model
+from .models import DQN
+from common_files.objects import ReplayMemory, Transition
+from common_files.plot_helper_functions import plot_durations
+from common_files.variables import device, is_ipython, TAU, LR
+from common_files.model_helper_functions import select_action, optimize_model
 
 
 def run_game_random():
