@@ -22,6 +22,7 @@ from common_files.plot_helper_functions import plot_durations
 from common_files.variables import device, is_ipython, TAU, LR
 from common_files.model_helper_functions import select_action, optimize_model
 from common_files.image_helper_functions import preprocess_image
+from common_files.framestack import FrameStack
 
 def run_game_random():
     env = gym.make("ALE/SpaceInvaders-v5", render_mode="rgb_array")
@@ -56,14 +57,13 @@ def create_gif_from_images(image_folder, gif_path, length):
 
 def train():
     env = gym.make("ALE/SpaceInvaders-v5")
-
     plt.ion()
-
+    framestack = FrameStack(env, 4)
 
     # Get number of actions from gym action space
     n_actions = env.action_space.n
     # Get the number of state observations
-    state, info = env.reset()
+    state = framestack.reset()
     n_observations = len(state)
     print("n_observations")
     print(n_observations)
@@ -86,17 +86,19 @@ def train():
 
     for i_episode in range(num_episodes):
         # Initialize the environment and get its state
-        state, info = env.reset()
-
+        state = framestack.reset()
 
         state = torch.tensor(state, dtype=torch.float32, device=device).view(3, 210, 160)
         print("HERE TAIDGH")
         print(state.shape)
-        print(policy_net(state))
+        tensor = torch.from_numpy(framestack.get_stack())
+        tensor = tensor.to(device)
+        print(tensor.shape)
 
+        print(policy_net(tensor))
 
         for t in count():
-            action = select_action(steps_done, policy_net, env, state)
+            action = select_action(steps_done, policy_net, framestack.env, framestack.get_stack())
             steps_done += 1
             observation, reward, terminated, truncated, _ = env.step(action.item())
             reward = torch.tensor([reward], device=device)
@@ -124,8 +126,8 @@ def train():
                 target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
             target_net.load_state_dict(target_net_state_dict)
             if i_episode % 10 == 0:
-                torch.save(target_net.state_dict(), 'models/target_net_' + str(i_episode) +'.pth')
-                torch.save(policy_net.state_dict(), 'models/policy_net_' + str(i_episode) +'.pth')
+                torch.save(target_net.state_dict(), 'space_invaders/models/target_net_' + str(i_episode) +'.pth')
+                torch.save(policy_net.state_dict(), 'space_invaders/models/policy_net_' + str(i_episode) +'.pth')
 
             if done:
                 episode_durations.append(t + 1)
@@ -143,7 +145,4 @@ def train():
 
 #create_gif_from_images("C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data", "C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data\\gif8.gif", 320)
 #run_game_random()
-#train()
-env = gym.make("ALE/SpaceInvaders-v5")
-state, info = env.reset()
-preprocess_image(state)
+train()

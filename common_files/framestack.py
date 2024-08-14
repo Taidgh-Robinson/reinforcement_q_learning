@@ -10,12 +10,18 @@ class FrameStack:
         self.frame_width = frame_width
         self.frames = deque(maxlen=queue_length)
 
-    def initialize(self):
+    def reset(self):
         """Initialize the frame stack by filling it with np.arrays of 0s, as they do in the paper"""
         state, info = self.env.reset()
+        #fill the deque with 0s
         for _ in range(self.queue_length):
             self.frames.append(np.zeros((self.frame_width, self.frame_height), dtype=np.float32))
+        
+        #Then add the first frame of the game
         self.frames.append(preprocess_image(state))
+
+        #Return the state for ease of access, could just do framestack.env.state but this makes it easier to read
+        return state
 
     def update(self, action):
         """Update the frame stack when an action is taken."""
