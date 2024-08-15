@@ -17,5 +17,5 @@ def preprocess_image(img):
     cropped_image = image_gray.crop((left, top, right, bottom))
 
     # Convert PIL Image back to NumPy array (if needed)
-    image_array = np.array(cropped_image)
+    image_array = np.array(cropped_image, dtype=np.float32)
     return image_array

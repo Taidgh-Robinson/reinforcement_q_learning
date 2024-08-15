@@ -65,8 +65,6 @@ def train():
     # Get the number of state observations
     state = framestack.reset()
     n_observations = len(state)
-    print("n_observations")
-    print(n_observations)
 
     policy_net = DQN(n_observations, n_actions).to(device)
     target_net = DQN(n_observations, n_actions).to(device)
@@ -87,30 +85,24 @@ def train():
     for i_episode in range(num_episodes):
         # Initialize the environment and get its state
         state = framestack.reset()
-
-        state = torch.tensor(state, dtype=torch.float32, device=device).view(3, 210, 160)
-        print("HERE TAIDGH")
-        print(state.shape)
         tensor = torch.from_numpy(framestack.get_stack())
         tensor = tensor.to(device)
-        print(tensor.shape)
-
-        print(policy_net(tensor))
 
         for t in count():
-            action = select_action(steps_done, policy_net, framestack.env, framestack.get_stack())
+            current_state = torch.from_numpy(framestack.get_stack()).float().to(device)
+            action = select_action(steps_done, policy_net, framestack.env, current_state)
             steps_done += 1
-            observation, reward, terminated, truncated, _ = env.step(action.item())
+            observation, reward, terminated, truncated, _ = framestack.step(action.item())
             reward = torch.tensor([reward], device=device)
             done = terminated or truncated
 
             if terminated:
                 next_state = None
             else:
-                next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
+                next_state = torch.from_numpy(framestack.get_stack()).float().to(device)
 
             # Store the transition in memory
-            memory.push(state, action, next_state, reward)
+            memory.push(current_state, action, next_state, reward)
 
             # Move to the next state
             state = next_state

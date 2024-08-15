@@ -23,7 +23,7 @@ class FrameStack:
         #Return the state for ease of access, could just do framestack.env.state but this makes it easier to read
         return state
 
-    def update(self, action):
+    def step(self, action):
         """Update the frame stack when an action is taken."""
         observation, reward, terminated, truncated, _ = self.env.step(action)
         preprocessed_frame = preprocess_image(observation)

@@ -13,11 +13,14 @@ def select_action(steps_done, policy_net, env, state):
         math.exp(-1. * steps_done / EPS_DECAY)
     if sample > eps_threshold:
         with torch.no_grad():
+            print("in greedy")
+            print(state.shape)
             # t.max(1) will return the largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
             return policy_net(state).max(1).indices.view(1, 1)
     else:
+        print("in non greedy")
         return torch.tensor([[env.action_space.sample()]], device=device, dtype=torch.long)
 
 def optimize_model(memory, policy_net, target_net, optimizer):
