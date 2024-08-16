@@ -17,3 +17,10 @@ class ReplayMemory(object):
 
     def __len__(self):
         return len(self.memory)
+
+    def __repr__(self):
+        for i in self.memory: 
+            print(i)
+            print(i.state.shape)
+
+        return ""

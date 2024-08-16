@@ -16,9 +16,7 @@ from common_files.variables import device, is_ipython, TAU, LR
 from common_files.model_helper_functions import select_action, optimize_model
 
 env = gym.make("CartPole-v1")
-print("HERE WE GO TAIDGH!")
 plt.ion()
-
 
 # Get number of actions from gym action space
 n_actions = env.action_space.n

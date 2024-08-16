@@ -20,7 +20,7 @@ from .models import DQN
 from common_files.objects import ReplayMemory, Transition
 from common_files.plot_helper_functions import plot_durations
 from common_files.variables import device, is_ipython, TAU, LR
-from common_files.model_helper_functions import select_action, optimize_model
+from common_files.model_helper_functions import select_action, optimize_conv_model
 from common_files.image_helper_functions import preprocess_image
 from common_files.framestack import FrameStack
 
@@ -108,7 +108,7 @@ def train():
             state = next_state
 
             # Perform one step of the optimization (on the policy network)
-            optimize_model(memory, policy_net, target_net, optimizer)
+            optimize_conv_model(memory, policy_net, target_net, optimizer)
 
             # Soft update of the target network's weights
             # θ′ ← τ θ + (1 −τ )θ′

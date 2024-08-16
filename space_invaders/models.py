@@ -13,10 +13,6 @@ class DQN(nn.Module):
         x = self.convLayer(x)
         # Flatten the output of Conv2d layer
         flat = x.view(x.size(0), -1)
-        print("In model Taidgh")
-        print(flat)
-        print(flat.shape)
-
  
         x = F.relu(self.layer5(flat))
 
