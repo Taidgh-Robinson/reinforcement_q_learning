@@ -66,8 +66,8 @@ def train():
     state = framestack.reset()
     n_observations = len(state)
 
-    policy_net = DQN(n_observations, n_actions).to(device)
-    target_net = DQN(n_observations, n_actions).to(device)
+    policy_net = DQN(n_actions).to(device)
+    target_net = DQN(n_actions).to(device)
     target_net.load_state_dict(policy_net.state_dict())
 
     optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)

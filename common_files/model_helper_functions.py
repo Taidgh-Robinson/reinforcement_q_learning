@@ -16,7 +16,11 @@ def select_action(steps_done, policy_net, env, state):
             # t.max(1) will return the largest column value of each row.
             # second column on max result is index of where max element was
             # found, so we pick action with the larger expected reward.
-            return policy_net(state).max(1).indices.view(1, 1)
+            simon_says = policy_net(state)
+            if(len(simon_says.shape) == 1):
+                return simon_says.max(0).indices.view(1, 1)
+            if(len(simon_says.shape) == 2):
+                return simon_says.max(1).indices.view(1, 1)
     else:
         return torch.tensor([[env.action_space.sample()]], device=device, dtype=torch.long)
 
@@ -104,7 +108,6 @@ def optimize_conv_model(memory, policy_net, target_net, optimizer):
     with torch.no_grad():
         #need to reshape the non_final states but unlike the state batch theres no static size so need to figure out how many sample to make it and then reshape
         batch_cnt = int(non_final_next_states.shape[0] / 4)
-
         non_final_next_states_reshaped = non_final_next_states.view(batch_cnt, 4, 84, 84)
         next_state_values[non_final_mask] = target_net(non_final_next_states_reshaped).max(1).values
     # Compute the expected Q values
