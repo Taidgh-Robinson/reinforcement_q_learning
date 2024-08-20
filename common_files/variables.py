@@ -8,10 +8,10 @@ import matplotlib
 # EPS_DECAY controls the rate of exponential decay of epsilon, higher means a slower decay
 # TAU is the update rate of the target network
 # LR is the learning rate of the ``AdamW`` optimizer
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 GAMMA = 0.99
-EPS_START = 0.9
-EPS_END = 0.05
+EPS_START = 1
+EPS_END = 0.1
 EPS_DECAY = 1000
 TAU = 0.005
 LR = 1e-4
