@@ -2,6 +2,8 @@ import math
 import random
 import torch.nn as nn
 
+import h5py
+
 from .variables import * 
 from .objects import Transition
 from torch import from_numpy
@@ -11,6 +13,10 @@ def preprocess_data_for_memory(something):
         something = something.cpu()
         return something.numpy()
     return something
+
+def save_data_as_h5(file_name, data):
+    with h5py.File('space_invaders/env_data/'+str(file_name)+'.h5', 'w') as f:
+        f.create_dataset(str(file_name), data=data)
 
 #Epsilon Greedy Selection
 def select_action(steps_done, policy_net, env, state):

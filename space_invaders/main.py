@@ -18,11 +18,10 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from .models import DQN
-from common_files.objects import ReplayMemory, Transition
+from common_files.objects import ReplayMemory
 from common_files.plot_helper_functions import plot_durations
 from common_files.variables import device, is_ipython, TAU, LR
-from common_files.model_helper_functions import select_action, optimize_conv_model, preprocess_data_for_memory
-from common_files.image_helper_functions import preprocess_image
+from common_files.model_helper_functions import select_action, optimize_conv_model, preprocess_data_for_memory, save_data_as_h5
 from common_files.framestack import FrameStack
 
 def run_game_random():
@@ -79,7 +78,7 @@ def train():
     episode = 0 
 
     if torch.cuda.is_available() or torch.backends.mps.is_available():
-        num_episodes = 1000000
+        num_episodes = 2000000
     else:
         num_episodes = 25000
 
@@ -149,5 +148,13 @@ def train():
 
 #create_gif_from_images("C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data", "C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data\\gif8.gif", 320)
 #run_game_random()
-train()
+#train()
+
+env = gym.make("ALE/SpaceInvaders-v5")
+framestack = FrameStack(env, 4)
+state = framestack.reset()
+for i in range(10): 
+    framestack.step(0)
+    
+save_data_as_h5(1, framestack.get_stack())
 
