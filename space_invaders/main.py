@@ -21,7 +21,7 @@ from .models import DQN
 from common_files.objects import ReplayMemory, Transition
 from common_files.plot_helper_functions import plot_durations
 from common_files.variables import device, is_ipython, TAU, LR
-from common_files.model_helper_functions import select_action, optimize_conv_model, push_to_cpu_if_not_None
+from common_files.model_helper_functions import select_action, optimize_conv_model, preprocess_data_for_memory
 from common_files.image_helper_functions import preprocess_image
 from common_files.framestack import FrameStack
 
@@ -81,13 +81,11 @@ def train():
     if torch.cuda.is_available() or torch.backends.mps.is_available():
         num_episodes = 1000000
     else:
-        num_episodes = 2000
+        num_episodes = 25000
 
     while total_frame_count < num_episodes:
         # Initialize the environment and get its state
         state = framestack.reset()
-        tensor = torch.from_numpy(framestack.get_stack())
-        tensor = tensor.to(device)
 
         for t in count():
             current_state = torch.from_numpy(framestack.get_stack()).float().to(device)
@@ -103,8 +101,7 @@ def train():
                 next_state = torch.from_numpy(framestack.get_stack()).float().to(device)
 
             # Store the transition in memory
-            memory.push(push_to_cpu_if_not_None(current_state), push_to_cpu_if_not_None(action), push_to_cpu_if_not_None(next_state), push_to_cpu_if_not_None(reward))
-            print(memory)
+            memory.push(preprocess_data_for_memory(current_state), preprocess_data_for_memory(action), preprocess_data_for_memory(next_state), preprocess_data_for_memory(reward))
             # Move to the next state
             state = next_state
 
@@ -134,6 +131,9 @@ def train():
                 print("FINISHED EPSISODE: " + str(episode))
                 print("Total frame count: " + str(total_frame_count))
                 print("Len of replay memory: " + str(len(memory.memory)))
+                print("GOING TO SAVE MODEL")
+                torch.save(target_net.state_dict(), 'space_invaders/models/target_net_' + str(episode) +'.pth')
+                torch.save(policy_net.state_dict(), 'space_invaders/models/policy_net_' + str(episode) +'.pth')
                 episode_durations.append(t + 1)
                 episode += 1
                 break
@@ -150,3 +150,4 @@ def train():
 #create_gif_from_images("C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data", "C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data\\gif8.gif", 320)
 #run_game_random()
 train()
+

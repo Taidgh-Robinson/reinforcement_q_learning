@@ -4,10 +4,12 @@ import torch.nn as nn
 
 from .variables import * 
 from .objects import Transition
+from torch import from_numpy
 
-def push_to_cpu_if_not_None(something):
+def preprocess_data_for_memory(something):
     if something is not None:
-        return something.cpu()
+        something = something.cpu()
+        return something.numpy()
     return something
 
 #Epsilon Greedy Selection
@@ -97,12 +99,12 @@ def optimize_conv_model(memory, policy_net, target_net, optimizer):
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
                                           batch.next_state)), device=device, dtype=torch.bool)
     
-    non_final_next_states = torch.cat([s for s in batch.next_state
+    non_final_next_states = torch.cat([from_numpy(s) for s in batch.next_state
                                                 if s is not None])
     
-    state_batch = torch.cat(batch.state)
-    action_batch = torch.cat(batch.action).to(device)
-    reward_batch = torch.cat(batch.reward).to(device)
+    state_batch = torch.cat([from_numpy(s) for s in batch.state])
+    action_batch = torch.cat([from_numpy(a) for a in batch.action]).to(device)
+    reward_batch = torch.cat([from_numpy(r) for r in batch.reward]).to(device)
     
     #when we pop out of the batch it comes out shape [1, BATCH_SIZE * 4, 84, 84] so need to reshape so its batches of 4 channels
     reshaped_state_batch = state_batch.view(BATCH_SIZE, 4, 84, 84).to(device)
