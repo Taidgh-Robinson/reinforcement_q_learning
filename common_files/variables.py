@@ -15,6 +15,7 @@ EPS_END = 0.1
 EPS_DECAY = 1000
 TAU = 0.005
 LR = 1e-4
+REPLAY_MEMORY_SIZE = 1000000
 
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()

@@ -2,11 +2,13 @@ import math
 import random
 import torch.nn as nn
 
-import h5py
-
-from .variables import * 
+from .h5_helper_functions import load_data_from_h5
+from .variables import EPS_DECAY, EPS_START, EPS_END, device, BATCH_SIZE, GAMMA, REPLAY_MEMORY_SIZE
 from .objects import Transition
 from torch import from_numpy
+import os
+import torch
+import pickle
 
 def preprocess_data_for_memory(something):
     if something is not None:
@@ -14,9 +16,21 @@ def preprocess_data_for_memory(something):
         return something.numpy()
     return something
 
-def save_data_as_h5(file_name, data):
-    with h5py.File('space_invaders/env_data/'+str(file_name)+'.h5', 'w') as f:
-        f.create_dataset(str(file_name), data=data)
+def save_training_information(iteration_number, memory, frameStack, target_net, policy_network, episode_durations):
+    path = 'space_invaders/models/' + str(iteration_number) + '/'
+    os.makedirs(path, exist_ok=True)
+
+    torch.save(target_net.state_dict(), path+'target_net.pth')
+    torch.save(policy_network.state_dict(), path+'policy_net.pth')
+    with open(path+'memory.pkl', 'wb') as f:
+        pickle.dump(memory, f)
+    with open(path+'framestack.pkl', 'wb') as f:
+        pickle.dump(frameStack, f)
+    with open(path+'count.pkl', 'wb') as f:
+        pickle.dump(iteration_number, f)
+    with open(path+'episode_durations.pkl', 'wb') as f:
+        pickle.dump(episode_durations, f)
+
 
 #Epsilon Greedy Selection
 def select_action(steps_done, policy_net, env, state):
@@ -26,7 +40,7 @@ def select_action(steps_done, policy_net, env, state):
     if sample > eps_threshold:
         with torch.no_grad():
             # t.max(1) will return the largest column value of each row.
-            # second column on max result is index of where max element was
+            # second column on max1 result is index of where max element was
             # found, so we pick action with the larger expected reward.
             simon_says = policy_net(state)
             if(len(simon_says.shape) == 1):
@@ -92,11 +106,19 @@ def optimize_conv_model(memory, policy_net, target_net, optimizer):
     
 
     transitions = memory.sample(BATCH_SIZE)
-    
+    tranistions2 = []
+    for t in transitions:
+        current_state = load_data_from_h5(t.state)
+        next_state = None
+        if(t.next_state is not None):
+            next_state = load_data_from_h5(t.next_state, True)
+        j = Transition(current_state, t.action, next_state, t.reward)
+
+        tranistions2.append(j)
     # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
     # detailed explanation). This converts batch-array of Transitions
     # to Transition of batch-arrays.
-    batch = Transition(*zip(*transitions))
+    batch = Transition(*zip(*tranistions2))
     
 
     # Compute a mask of non-final states and concatenate the batch elements

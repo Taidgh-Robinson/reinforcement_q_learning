@@ -11,7 +11,8 @@ import random
 import matplotlib
 import matplotlib.pyplot as plt
 from itertools import count
-
+import numpy as np
+import pickle
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -20,8 +21,9 @@ import torch.nn.functional as F
 from .models import DQN
 from common_files.objects import ReplayMemory
 from common_files.plot_helper_functions import plot_durations
-from common_files.variables import device, is_ipython, TAU, LR
-from common_files.model_helper_functions import select_action, optimize_conv_model, preprocess_data_for_memory, save_data_as_h5
+from common_files.variables import device, is_ipython, LR, REPLAY_MEMORY_SIZE
+from common_files.model_helper_functions import select_action, optimize_conv_model, preprocess_data_for_memory, save_training_information
+from common_files.h5_helper_functions import save_data_as_h5
 from common_files.framestack import FrameStack
 
 def run_game_random():
@@ -54,23 +56,22 @@ def create_gif_from_images(image_folder, gif_path, length):
     # Save the images as a GIF
     images[0].save(gif_path, save_all=True, append_images=images[1:], duration=length//8, loop=0)
 
-def train():
+def train(p_net = None, t_net = None, mem = None):
     env = gym.make("ALE/SpaceInvaders-v5")
     plt.ion()
     framestack = FrameStack(env, 4)
 
     # Get number of actions from gym action space
     n_actions = env.action_space.n
-    # Get the number of state observations
     state = framestack.reset()
-    n_observations = len(state)
 
-    policy_net = DQN(n_actions).to(device)
-    target_net = DQN(n_actions).to(device)
-    target_net.load_state_dict(policy_net.state_dict())
+    policy_net = p_net if p_net is not None else DQN(n_actions).to(device)
+    target_net = t_net if t_net is not None else DQN(n_actions).to(device)
+    if p_net is None:
+        target_net.load_state_dict(policy_net.state_dict())
 
     optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
-    memory = ReplayMemory(1000000)
+    memory = mem if mem is not None else ReplayMemory(REPLAY_MEMORY_SIZE)
 
     steps_done = 0
     total_frame_count =0 
@@ -88,7 +89,7 @@ def train():
 
         for t in count():
             current_state = torch.from_numpy(framestack.get_stack()).float().to(device)
-            action = select_action(steps_done, policy_net, framestack.env, current_state)
+            action = select_action(total_frame_count, policy_net, framestack.env, current_state)
             steps_done += 1
             observation, reward, terminated, truncated, _ = framestack.step(action.item())
             reward = torch.tensor([reward], device=device)
@@ -100,7 +101,17 @@ def train():
                 next_state = torch.from_numpy(framestack.get_stack()).float().to(device)
 
             # Store the transition in memory
-            memory.push(preprocess_data_for_memory(current_state), preprocess_data_for_memory(action), preprocess_data_for_memory(next_state), preprocess_data_for_memory(reward))
+            #We write the current state and next state's to files, and then we 
+            current_state_processed = preprocess_data_for_memory(current_state)
+            save_data_as_h5(total_frame_count, current_state_processed)
+
+            tmp = None
+            if(next_state is not None):
+                next_state_processed = preprocess_data_for_memory(next_state)
+                save_data_as_h5(total_frame_count, next_state_processed, True)
+                tmp = total_frame_count
+
+            memory.push(total_frame_count, preprocess_data_for_memory(action), tmp, preprocess_data_for_memory(reward))
             # Move to the next state
             state = next_state
 
@@ -149,12 +160,35 @@ def train():
 #create_gif_from_images("C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data", "C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data\\gif8.gif", 320)
 #run_game_random()
 #train()
-
 env = gym.make("ALE/SpaceInvaders-v5")
 framestack = FrameStack(env, 4)
-state = framestack.reset()
-for i in range(10): 
-    framestack.step(0)
-    
-save_data_as_h5(1, framestack.get_stack())
+framestack.reset()
+terminated = False
+while not terminated: 
+    observation, reward, terminated, truncated, _ = framestack.step(0)
+    terminated = truncated or terminated
+framestack.step(0)
 
+memory = ReplayMemory(REPLAY_MEMORY_SIZE)
+scalar_array = np.array(0)
+n_actions = env.action_space.n
+memory.push(0, scalar_array, 0, scalar_array)
+policy_net = DQN(n_actions)
+target_net = DQN(n_actions)
+save_training_information(100, memory, framestack, policy_net, target_net)
+
+with open('space_invaders/models/100/memory.pkl', 'rb') as file:
+    loaded_data = pickle.load(file)
+    print(loaded_data.memory[0])
+
+with open('space_invaders/models/100/framestack.pkl', 'rb') as file:
+    loaded_data = pickle.load(file)
+    print(framestack.get_stack()[3])
+
+    next_state, reward, done, truncated, info = env.step(0)
+    print(done)
+
+with open('space_invaders/models/100/count.pkl', 'rb') as file:
+    loaded_data = pickle.load(file)
+    print(loaded_data)
+    print(type(loaded_data))
