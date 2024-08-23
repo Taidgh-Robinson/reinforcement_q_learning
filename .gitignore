@@ -1,5 +1,5 @@
 __pycache__
 cart_pole/__pycache__
-space_invaders/__pycache__
-space_invaders/models
-space_invaders/env_data
+atari_dqn/__pycache__
+atari_dqn/models
+atari_dqn/env_data

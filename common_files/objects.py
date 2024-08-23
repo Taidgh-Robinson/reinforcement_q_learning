@@ -21,6 +21,5 @@ class ReplayMemory(object):
     def __repr__(self):
         for i in self.memory: 
             print(i)
-            print(i.state.shape)
-
+            
         return ""

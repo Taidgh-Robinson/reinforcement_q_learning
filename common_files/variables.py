@@ -13,9 +13,11 @@ GAMMA = 0.99
 EPS_START = 1
 EPS_END = 0.1
 EPS_DECAY = 1000
+EPS_END_STEP_COUNT = 1000000
 TAU = 0.005
 LR = 1e-4
 REPLAY_MEMORY_SIZE = 1000000
+K = 4
 
 # set up matplotlib
 is_ipython = 'inline' in matplotlib.get_backend()

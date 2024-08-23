@@ -1,28 +1,18 @@
 import gymnasium as gym
 import matplotlib.pyplot as plt
-from IPython.display import clear_output
 from IPython import display
 from PIL import Image
 import os
-import gymnasium as gym
-import sys
 
-import random
-import matplotlib
-import matplotlib.pyplot as plt
 from itertools import count
-import numpy as np
-import pickle
 import torch
-import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 
 from .models import DQN
 from common_files.objects import ReplayMemory
 from common_files.plot_helper_functions import plot_durations
-from common_files.variables import device, is_ipython, LR, REPLAY_MEMORY_SIZE
-from common_files.model_helper_functions import select_action, optimize_conv_model, preprocess_data_for_memory, save_training_information
+from common_files.variables import device, is_ipython, LR, REPLAY_MEMORY_SIZE, K 
+from common_files.model_helper_functions import select_action_linearly, optimize_conv_model, preprocess_data_for_memory, save_training_information, load_training_info
 from common_files.h5_helper_functions import save_data_as_h5
 from common_files.framestack import FrameStack
 
@@ -56,17 +46,24 @@ def create_gif_from_images(image_folder, gif_path, length):
     # Save the images as a GIF
     images[0].save(gif_path, save_all=True, append_images=images[1:], duration=length//8, loop=0)
 
-def train(p_net = None, t_net = None, mem = None):
-    env = gym.make("ALE/SpaceInvaders-v5")
+def train(env, episodes_to_train, game_name, f_stack = None, p_net = None, t_net = None, mem = None, t_frame_count = 0):
+    assert episodes_to_train % 100000 == 0, "Training steps must be a multiple of 100k, for reasons"
     plt.ion()
-    framestack = FrameStack(env, 4)
+    framestack = f_stack if f_stack is not None else FrameStack(env, 4)
 
     # Get number of actions from gym action space
     n_actions = env.action_space.n
     state = framestack.reset()
 
-    policy_net = p_net if p_net is not None else DQN(n_actions).to(device)
-    target_net = t_net if t_net is not None else DQN(n_actions).to(device)
+    policy_net = DQN(n_actions).to(device)
+   
+    if p_net is not None: 
+        policy_net.load_state_dict(p_net)
+    target_net = DQN(n_actions).to(device)
+    
+    if t_net is not None: 
+        target_net.load_state_dict(t_net)
+
     if p_net is None:
         target_net.load_state_dict(policy_net.state_dict())
 
@@ -74,23 +71,23 @@ def train(p_net = None, t_net = None, mem = None):
     memory = mem if mem is not None else ReplayMemory(REPLAY_MEMORY_SIZE)
 
     steps_done = 0
-    total_frame_count =0 
+    total_frame_count = t_frame_count
     episode_durations = []
     episode = 0 
-
-    if torch.cuda.is_available() or torch.backends.mps.is_available():
-        num_episodes = 2000000
-    else:
-        num_episodes = 25000
-
+    num_episodes = total_frame_count + episodes_to_train
     while total_frame_count < num_episodes:
-        # Initialize the environment and get its state
-        state = framestack.reset()
+        # Initialize the environment
+        framestack.reset()
 
         for t in count():
             current_state = torch.from_numpy(framestack.get_stack()).float().to(device)
-            action = select_action(total_frame_count, policy_net, framestack.env, current_state)
+
+            #we select a new action every k steps, as per paper
+            if(t % K == 0):
+                action = select_action_linearly(total_frame_count, policy_net, framestack.env, current_state)
+
             steps_done += 1
+
             observation, reward, terminated, truncated, _ = framestack.step(action.item())
             reward = torch.tensor([reward], device=device)
             done = terminated or truncated
@@ -112,11 +109,13 @@ def train(p_net = None, t_net = None, mem = None):
                 tmp = total_frame_count
 
             memory.push(total_frame_count, preprocess_data_for_memory(action), tmp, preprocess_data_for_memory(reward))
-            # Move to the next state
-            state = next_state
 
             # Perform one step of the optimization (on the policy network)
-            optimize_conv_model(memory, policy_net, target_net, optimizer)
+            #We only do this on every kth step as per the paper
+            # "More precisely, the agent sees and selects actions on every kth frame instead of every frame, and its last action is repeated on skipped frames"
+            
+            if(t % K == 0):
+                optimize_conv_model(memory, policy_net, target_net, optimizer)
 
             # DQN white paper doesnt use a soft update for the weights 
             # it just copies the weights from the policy net to the target net after 10,000 games have been played
@@ -130,10 +129,10 @@ def train(p_net = None, t_net = None, mem = None):
                 target_net.load_state_dict(target_net_state_dict)
 
             #Save models every 100k frames
+            #Do this because 100k % 4 = 0 and its a reasonable number thats 1/100th of our total
             if total_frame_count % 100000 == 0:
                 print("GOING TO SAVE MODEL")
-                torch.save(target_net.state_dict(), 'space_invaders/models/target_net_' + str(episode) +'.pth')
-                torch.save(policy_net.state_dict(), 'space_invaders/models/policy_net_' + str(episode) +'.pth')
+                save_training_information(total_frame_count, memory, framestack, target_net, policy_net, episode_durations)
             
             total_frame_count+=1 
 
@@ -141,9 +140,6 @@ def train(p_net = None, t_net = None, mem = None):
                 print("FINISHED EPSISODE: " + str(episode))
                 print("Total frame count: " + str(total_frame_count))
                 print("Len of replay memory: " + str(len(memory.memory)))
-                print("GOING TO SAVE MODEL")
-                torch.save(target_net.state_dict(), 'space_invaders/models/target_net_' + str(episode) +'.pth')
-                torch.save(policy_net.state_dict(), 'space_invaders/models/policy_net_' + str(episode) +'.pth')
                 episode_durations.append(t + 1)
                 episode += 1
                 break
@@ -161,34 +157,4 @@ def train(p_net = None, t_net = None, mem = None):
 #run_game_random()
 #train()
 env = gym.make("ALE/SpaceInvaders-v5")
-framestack = FrameStack(env, 4)
-framestack.reset()
-terminated = False
-while not terminated: 
-    observation, reward, terminated, truncated, _ = framestack.step(0)
-    terminated = truncated or terminated
-framestack.step(0)
-
-memory = ReplayMemory(REPLAY_MEMORY_SIZE)
-scalar_array = np.array(0)
-n_actions = env.action_space.n
-memory.push(0, scalar_array, 0, scalar_array)
-policy_net = DQN(n_actions)
-target_net = DQN(n_actions)
-save_training_information(100, memory, framestack, policy_net, target_net)
-
-with open('space_invaders/models/100/memory.pkl', 'rb') as file:
-    loaded_data = pickle.load(file)
-    print(loaded_data.memory[0])
-
-with open('space_invaders/models/100/framestack.pkl', 'rb') as file:
-    loaded_data = pickle.load(file)
-    print(framestack.get_stack()[3])
-
-    next_state, reward, done, truncated, info = env.step(0)
-    print(done)
-
-with open('space_invaders/models/100/count.pkl', 'rb') as file:
-    loaded_data = pickle.load(file)
-    print(loaded_data)
-    print(type(loaded_data))
+train(env, 7)
