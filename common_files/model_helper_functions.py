@@ -16,12 +16,12 @@ def preprocess_data_for_memory(something):
         return something.numpy()
     return something
 
-def save_training_information(iteration_number, memory, frameStack, target_net, policy_network, episode_durations):
-    path = 'atari_dqn/models/' + str(iteration_number) + '/'
+def save_training_information(game_name, iteration_number, memory, frameStack, target_net, policy_network, episode_durations):
+    path = 'atari_dqn/models/' +game_name+"/"+ str(iteration_number) + '/'
     os.makedirs(path, exist_ok=True)
-
-    torch.save(target_net.state_dict(), path+'target_net.pth')
     torch.save(policy_network.state_dict(), path+'policy_net.pth')
+    torch.save(target_net.state_dict(), path+'target_net.pth')
+
     with open(path+'memory.pkl', 'wb') as f:
         pickle.dump(memory, f)
     with open(path+'framestack.pkl', 'wb') as f:
@@ -31,13 +31,30 @@ def save_training_information(iteration_number, memory, frameStack, target_net, 
     with open(path+'episode_durations.pkl', 'wb') as f:
         pickle.dump(episode_durations, f)
 
-def load_training_info(iteration_number): 
-    path = 'atari_dqn/models/' + str(iteration_number) + '/'
-    with open(path+'memory.pkl', 'rb') as file:
-    # Load the object from the file
-        data = pickle.load(file)
-    return data
+def load_training_info(game_name, iteration_number): 
+    path = 'atari_dqn/models/' + game_name + "/" + str(iteration_number) + '/'
+    p_net = torch.load(path+'policy_net.pth')
+    t_net = torch.load(path+'target_net.pth')
     
+    with open(path+'memory.pkl', 'rb') as file:
+        memory_data = pickle.load(file)
+    with open(path+'framestack.pkl', 'rb') as file:
+        framestack_data = pickle.load(file)
+    with open(path+'count.pkl', 'rb') as file:
+        count_data = pickle.load(file)
+    with open(path+'episode_durations.pkl', 'rb') as file:
+        episode_data = pickle.load(file)
+
+    return [p_net, t_net, memory_data, framestack_data, count_data, episode_data]
+    
+
+def clip_reward(reward):
+    if reward > 0:
+        return 1 
+    if reward == 0: 
+        return 0
+    if reward < 0: 
+        return -1
 
 #Epsilon Greedy Selection
 def select_action(steps_done, policy_net, env, state):
@@ -126,7 +143,7 @@ def optimize_model(memory, policy_net, target_net, optimizer):
     torch.nn.utils.clip_grad_value_(policy_net.parameters(), 100)
     optimizer.step()
 
-def optimize_conv_model(memory, policy_net, target_net, optimizer):
+def optimize_conv_model(game_name, memory, policy_net, target_net, optimizer):
     
     if len(memory) < BATCH_SIZE:
         return
@@ -135,10 +152,10 @@ def optimize_conv_model(memory, policy_net, target_net, optimizer):
     transitions = memory.sample(BATCH_SIZE)
     tranistions2 = []
     for t in transitions:
-        current_state = load_data_from_h5(t.state)
+        current_state = load_data_from_h5(game_name, t.state)
         next_state = None
         if(t.next_state is not None):
-            next_state = load_data_from_h5(t.next_state, True)
+            next_state = load_data_from_h5(game_name, t.next_state, True)
         j = Transition(current_state, t.action, next_state, t.reward)
 
         tranistions2.append(j)
@@ -185,7 +202,7 @@ def optimize_conv_model(memory, policy_net, target_net, optimizer):
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
     
     # Compute Huber loss
-    criterion = nn.SmoothL1Loss()
+    criterion = nn.MSELoss()
     
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
     
