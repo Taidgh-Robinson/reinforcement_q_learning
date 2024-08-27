@@ -16,7 +16,7 @@ def preprocess_data_for_memory(something):
         return something.numpy()
     return something
 
-def save_training_information(game_name, iteration_number, memory, frameStack, target_net, policy_network, episode_durations):
+def save_training_information(game_name, iteration_number, memory, frameStack, target_net, policy_network, episode_durations, is_done):
     path = 'atari_dqn/models/' +game_name+"/"+ str(iteration_number) + '/'
     os.makedirs(path, exist_ok=True)
     torch.save(policy_network.state_dict(), path+'policy_net.pth')
@@ -30,6 +30,8 @@ def save_training_information(game_name, iteration_number, memory, frameStack, t
         pickle.dump(iteration_number, f)
     with open(path+'episode_durations.pkl', 'wb') as f:
         pickle.dump(episode_durations, f)
+    with open(path+'is_done.pkl', 'wb') as f:
+        pickle.dump(is_done, f)
 
 def load_training_info(game_name, iteration_number): 
     path = 'atari_dqn/models/' + game_name + "/" + str(iteration_number) + '/'
@@ -44,8 +46,10 @@ def load_training_info(game_name, iteration_number):
         count_data = pickle.load(file)
     with open(path+'episode_durations.pkl', 'rb') as file:
         episode_data = pickle.load(file)
+    with open(path+'is_done.pkl', 'rb') as file:
+        is_done = pickle.load(file)
 
-    return [p_net, t_net, memory_data, framestack_data, count_data, episode_data]
+    return [p_net, t_net, memory_data, framestack_data, count_data, episode_data, is_done]
     
 
 def clip_reward(reward):

@@ -15,9 +15,8 @@ MODEL_NAME = "policy_net_400.pth"
 # Filter out DeprecationWarning
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-def run_loaded_model_till_failure():
-    env = gym.make("CartPole-v1", render_mode='rgb_array')
-
+def run_loaded_model_till_failure(env):
+    
     n_actions = env.action_space.n
     # Get the number of state observations
     state, info = env.reset()

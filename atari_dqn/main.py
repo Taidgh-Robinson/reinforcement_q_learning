@@ -12,7 +12,7 @@ from .models import DQN
 from common_files.objects import ReplayMemory
 from common_files.plot_helper_functions import plot_durations
 from common_files.variables import device, is_ipython, LR, REPLAY_MEMORY_SIZE, K 
-from common_files.model_helper_functions import select_action_linearly, optimize_conv_model, preprocess_data_for_memory, save_training_information, clip_reward
+from common_files.model_helper_functions import select_action_linearly, optimize_conv_model, preprocess_data_for_memory, save_training_information, clip_reward, load_training_info
 from common_files.h5_helper_functions import save_data_as_h5
 from common_files.framestack import FrameStack
 
@@ -46,43 +46,34 @@ def create_gif_from_images(image_folder, gif_path, length):
     # Save the images as a GIF
     images[0].save(gif_path, save_all=True, append_images=images[1:], duration=length//8, loop=0)
 
-def train(env, episodes_to_train, game_name, p_net = None, t_net = None, mem = None,f_stack = None, t_frame_count = 0, e_data=None):
+def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t_frame_count, e_data, is_done):
     assert episodes_to_train % 100000 == 0, "Training steps must be a multiple of 100k, for reasons"
     plt.ion()
-    framestack = f_stack if f_stack is not None else FrameStack(env, 4)
-
+    framestack = f_stack
+    if (is_done):
+        f_stack.reset()
     # Get number of actions from gym action space
-    n_actions = env.action_space.n
-    state = framestack.reset()
+    n_actions = f_stack.env.action_space.n
 
     policy_net = DQN(n_actions).to(device)
-   
-    if p_net is not None: 
-        policy_net.load_state_dict(p_net)
-    target_net = DQN(n_actions).to(device)
-    
-    if t_net is not None: 
-        target_net.load_state_dict(t_net)
+    policy_net.load_state_dict(p_net)
 
-    if p_net is None:
-        target_net.load_state_dict(policy_net.state_dict())
+    target_net = DQN(n_actions).to(device)
+    target_net.load_state_dict(t_net)
 
     optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
-    memory = mem if mem is not None else ReplayMemory(REPLAY_MEMORY_SIZE)
+    memory = mem
 
     steps_done = 0
-    #Sicne we're resuming we start on the next frame from where we started off, but if we're not resuming we start at 0 
-    total_frame_count = t_frame_count if t_frame_count == 0 else t_frame_count + 1
+    total_frame_count = t_frame_count + 1
     episode_durations = e_data if e_data is not None else []
     episode = 0 
     num_episodes = total_frame_count + episodes_to_train
     while total_frame_count < num_episodes:
-        # Initialize the environment
-        framestack.reset()
-
+        if episode != 0: 
+            framestack.reset()
         for t in count():
             current_state = torch.from_numpy(framestack.get_stack()).float().to(device)
-
             #we select a new action every k steps, as per paper
             if(t % K == 0):
                 action = select_action_linearly(total_frame_count, policy_net, framestack.env, current_state)
@@ -130,9 +121,9 @@ def train(env, episodes_to_train, game_name, p_net = None, t_net = None, mem = N
 
             #Save models every 100k frames
             #Do this because 100k % 4 = 0 and its a reasonable number thats 1/100th of our total
-            if total_frame_count % 100000 == 0:
+            if (total_frame_count+1) % 100000 == 0:
                 print("GOING TO SAVE MODEL")
-                save_training_information(game_name, total_frame_count, memory, framestack, target_net, policy_net, episode_durations)
+                save_training_information(game_name, total_frame_count, memory, framestack, target_net, policy_net, episode_durations, done)
             
             total_frame_count+=1 
 
@@ -174,6 +165,7 @@ def start_train(env, game_name):
     episode_durations = []
     episode = 0 
     num_episodes = 500000-1
+    total_reward = 0 
     while total_frame_count < num_episodes:
         # Initialize the environment
         framestack.reset()
@@ -188,6 +180,7 @@ def start_train(env, game_name):
             steps_done += 1
 
             observation, reward, terminated, truncated, _ = framestack.step(action.item())
+            total_reward += clip_reward(reward)
             reward = torch.tensor([clip_reward(reward)], device=device)
             done = terminated or truncated
 
@@ -231,14 +224,16 @@ def start_train(env, game_name):
             #Do this because 100k % 4 = 0 and its a reasonable number thats 1/100th of our total
             if (total_frame_count+1) % 100000 == 0:
                 print("GOING TO SAVE MODEL")
-                save_training_information(game_name, total_frame_count, memory, framestack, target_net, policy_net, episode_durations)
+                save_training_information(game_name, total_frame_count, memory, framestack, target_net, policy_net, episode_durations, done)
             
             total_frame_count+=1 
 
             if done:
                 print("FINISHED EPSISODE: " + str(episode))
+                print("TOTAL REWARD: " + str(total_reward))
                 print("CURRENT STEP COUNT: " + str(total_frame_count))
-                episode_durations.append(t + 1)
+                episode_durations.append(total_reward)
+                total_reward = 0
                 episode += 1
                 break
 
@@ -257,5 +252,45 @@ def start_train(env, game_name):
 #env = gym.make("ALE/Breakout-v5")
 #train(env, 100000, 'Breakout')
 
-env = gym.make("ALE/Breakout-v5")
-start_train(env, "Breakout")
+#env = gym.make("ALE/Breakout-v5")
+#start_train(env, "Breakout")
+
+data = load_training_info("Breakout", 499999)
+continue_training(500000, "Breakout", data[0], data[1], data[2], data[3], data[4], data[5], data[6])
+
+def run_loaded_model_till_failure(env, game_name, iter_count, MODEL_NAME):
+
+    n_actions = env.action_space.n
+    # Get the number of state observations
+    state, info = env.reset()
+    n_observations = len(state)
+
+    network = DQN(n_actions)
+
+    network.load_state_dict(torch.load('atari_dqn/models/'+game_name+"/"+str(iter_count)+"/"+MODEL_NAME, map_location=torch.device('cpu')))
+    state = torch.tensor(state, dtype=torch.float32, device=device)
+
+    not_terminated = True
+    total_reward = 0
+    run_count = 0 
+    with torch.no_grad():
+        while not_terminated:
+            plt.imshow(env.render())
+            display.display(plt.gcf())
+            display.clear_output(wait=True)
+            plt.savefig("atari_dqn/data/"+MODEL_NAME+str(run_count)+'.jpg')
+
+            act = network(state)
+            max_index = torch.argmax(act).item()
+
+            observation, reward, terminated, truncated, _ = env.step(max_index)
+            next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
+            state = next_state
+            not_terminated = not terminated and not truncated
+            total_reward += reward
+            run_count += 1
+
+        print(total_reward)
+
+
+#run_loaded_model_till_failure(env, "Breakout", 499999, 'policy_net.pth')
