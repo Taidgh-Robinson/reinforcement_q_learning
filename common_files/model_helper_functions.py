@@ -85,6 +85,10 @@ def select_action_linearly(steps_done, policy_net, env, state):
         eps_threshold = EPS_START + ((steps_done / (EPS_END_STEP_COUNT - 1)) * (EPS_END - EPS_START))
     else: 
         eps_threshold = EPS_END
+
+    if(steps_done % 25000 == 0):
+        print("Steps done: " + str(steps_done))
+        print("Eps threshold: " + str(eps_threshold))
     if sample > eps_threshold:
         with torch.no_grad():
             # t.max(1) will return the largest column value of each row.
@@ -150,8 +154,8 @@ def optimize_model(memory, policy_net, target_net, optimizer):
 def optimize_conv_model(game_name, memory, policy_net, target_net, optimizer):
     
     if len(memory) < BATCH_SIZE:
+        print("not enough data in memory, passing")
         return
-    
 
     transitions = memory.sample(BATCH_SIZE)
     tranistions2 = []
@@ -207,16 +211,12 @@ def optimize_conv_model(game_name, memory, policy_net, target_net, optimizer):
     
     # Compute Huber loss
     criterion = nn.MSELoss()
-    
+
     loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
     
     # Optimize the model
     optimizer.zero_grad()
-    loss.backward()
-    
 
-    # In-place gradient clipping
-    torch.nn.utils.clip_grad_value_(policy_net.parameters(), 100)
-    
+    loss.backward()    
     optimizer.step()
-    
+    return loss.item()

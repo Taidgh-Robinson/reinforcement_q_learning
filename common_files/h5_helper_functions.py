@@ -14,8 +14,17 @@ def save_data_as_h5(game_name, iteration_count, data, is_next_state=False):
 def load_data_from_h5(game_name, iteration_count, is_next_state=False):
     data = None
     with h5py.File('atari_dqn/env_data/'+game_name+"/"+generate_file_name(iteration_count, is_next_state)+'.h5', 'r') as f:
-        dataset = f[str(iteration_count)]
+        try:
+            dataset = f[str(iteration_count)]
+        #My computer has crashed a few times mid training,
+        #This means we can no longer access the data because they have the wrong titles
+        #This is kind of like cheating but it allows me to recover after a crash without completly restarting 
+        #I dont even know if itll work or if itll completely jank the thing, testing now...
+        except KeyError:
+            dataset = f[str(iteration_count+1000000)]
+
         data = np.array(dataset)
+
 
     return data
 

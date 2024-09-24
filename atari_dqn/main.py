@@ -50,10 +50,12 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
     assert episodes_to_train % 100000 == 0, "Training steps must be a multiple of 100k, for reasons"
     plt.ion()
     framestack = f_stack
+
     if (is_done):
         f_stack.reset()
     # Get number of actions from gym action space
     n_actions = f_stack.env.action_space.n
+    print("NUMBER OF ACTIONS: " + str(n_actions))
 
     policy_net = DQN(n_actions).to(device)
     policy_net.load_state_dict(p_net)
@@ -61,18 +63,22 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
     target_net = DQN(n_actions).to(device)
     target_net.load_state_dict(t_net)
 
-    optimizer = optim.AdamW(policy_net.parameters(), lr=LR, amsgrad=True)
+    optimizer = optim.Adam(params=policy_net.parameters(), lr=0.00005)
     memory = mem
 
     steps_done = 0
     total_frame_count = t_frame_count + 1
     episode_durations = e_data if e_data is not None else []
-    episode = 0 
+    episode = 0
     num_episodes = total_frame_count + episodes_to_train
+    total_reward = 0
+    loss = 0
     while total_frame_count < num_episodes:
         if episode != 0: 
             framestack.reset()
         for t in count():
+            if(total_frame_count > num_episodes): 
+                break 
             current_state = torch.from_numpy(framestack.get_stack()).float().to(device)
             #we select a new action every k steps, as per paper
             if(t % K == 0):
@@ -81,7 +87,8 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
             steps_done += 1
 
             observation, reward, terminated, truncated, _ = framestack.step(action.item())
-            reward = torch.tensor([reward], device=device)
+            reward = torch.tensor([clip_reward(reward)], device=device)
+            total_reward += reward 
             done = terminated or truncated
 
             if terminated:
@@ -106,11 +113,12 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
             #We only do this on every kth step as per the paper
             # "More precisely, the agent sees and selects actions on every kth frame instead of every frame, and its last action is repeated on skipped frames"
             if(t % K == 0):
-                optimize_conv_model(game_name, memory, policy_net, target_net, optimizer)
+                loss = optimize_conv_model(game_name, memory, policy_net, target_net, optimizer)
 
             # DQN white paper doesnt use a soft update for the weights 
             # it just copies the weights from the policy net to the target net after 10,000 games have been played
-            if(total_frame_count % 10000 == 0):
+            if ((total_frame_count+1) % 50000) == 0:
+                print("GOING TO COPY POLICY NET TO TARGET NET ON TFC: " + str(total_frame_count))
                 target_net_state_dict = target_net.state_dict()
                 policy_net_state_dict = policy_net.state_dict()
 
@@ -130,7 +138,10 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
             if done:
                 print("FINISHED EPSISODE: " + str(episode))
                 print("CURRENT STEP COUNT: " + str(total_frame_count))
-                episode_durations.append(t + 1)
+                print("MOST RECENT LOSS AT END OF EPISODE: " + str(loss))
+
+                episode_durations.append(total_reward)
+                total_reward = 0
                 episode += 1
                 break
 
@@ -147,30 +158,34 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
 #then doing if param is not none param else : whatever the init value is but that is difficult to read and since I'm presenting this the start training method was born
 #Train the model for 100k frames to get everybody cooking
 def start_train(env, game_name):
-
     plt.ion()
     framestack = FrameStack(env, 4)
 
     # Get number of actions from gym action space
     n_actions = env.action_space.n
+    print("NUMBER OF ACTIONS: " + str(n_actions))
     framestack.reset()
     policy_net = DQN(n_actions).to(device)
     target_net = DQN(n_actions).to(device)
     
-    optimizer = optim.RMSprop(policy_net.parameters(), lr=0.00025, alpha = 0.95, eps=0.01)
+    optimizer = optim.Adam(params=policy_net.parameters(), lr=0.00005)
     memory = ReplayMemory(REPLAY_MEMORY_SIZE)
 
     steps_done = 0
     total_frame_count = 0 
     episode_durations = []
     episode = 0 
-    num_episodes = 500000-1
-    total_reward = 0 
+    num_episodes = 200000-1
+    total_reward = 0
+    losses = []
     while total_frame_count < num_episodes:
         # Initialize the environment
         framestack.reset()
 
         for t in count():
+            if(total_frame_count > num_episodes): 
+                break 
+
             current_state = torch.from_numpy(framestack.get_stack()).float().to(device)
 
             #we select a new action every k steps, as per paper
@@ -189,7 +204,7 @@ def start_train(env, game_name):
             else:
                 next_state = torch.from_numpy(framestack.get_stack()).float().to(device)
 
-            # tore the transition in memory
+            #store the transition in memory
             #We write the current state and next state's to files, and then we push pointers to those files to the replay memory
             current_state_processed = preprocess_data_for_memory(current_state)
             save_data_as_h5(game_name, total_frame_count, current_state_processed)
@@ -206,12 +221,14 @@ def start_train(env, game_name):
             #We only do this on every kth step as per the paper
             # "More precisely, the agent sees and selects actions on every kth frame instead of every frame, and its last action is repeated on skipped frames"
             if(t % K == 0):
-                optimize_conv_model(game_name, memory, policy_net, target_net, optimizer)
+                loss = optimize_conv_model(game_name, memory, policy_net, target_net, optimizer)
+                if loss is not None:
+                    losses.append(loss)
 
             # DQN white paper doesnt use a soft update for the weights 
             # it just copies the weights from the policy net to the target net after 10,000 frames have been played
-            if(total_frame_count+1 % 10000 == 0):
-                print("GOING TO UPDATE TARGET NET")
+            if ((total_frame_count+1) % 10000) == 0:
+                print("GOING TO COPY POLICY NET TO TARGET NET ON TFC: " + str(total_frame_count))
                 target_net_state_dict = target_net.state_dict()
                 policy_net_state_dict = policy_net.state_dict()
 
@@ -232,6 +249,9 @@ def start_train(env, game_name):
                 print("FINISHED EPSISODE: " + str(episode))
                 print("TOTAL REWARD: " + str(total_reward))
                 print("CURRENT STEP COUNT: " + str(total_frame_count))
+                print("AVERAGE LOSS OVER EPISODES: " + str(sum(losses)/ len(losses)))
+                print(" --- ")
+                losses = []
                 episode_durations.append(total_reward)
                 total_reward = 0
                 episode += 1
@@ -255,7 +275,7 @@ def start_train(env, game_name):
 #env = gym.make("ALE/Breakout-v5")
 #start_train(env, "Breakout")
 
-data = load_training_info("Breakout", 499999)
+data = load_training_info("Breakout", 1199999)
 continue_training(500000, "Breakout", data[0], data[1], data[2], data[3], data[4], data[5], data[6])
 
 def run_loaded_model_till_failure(env, game_name, iter_count, MODEL_NAME):
