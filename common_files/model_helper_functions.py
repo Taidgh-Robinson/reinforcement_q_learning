@@ -151,7 +151,7 @@ def optimize_model(memory, policy_net, target_net, optimizer):
     torch.nn.utils.clip_grad_value_(policy_net.parameters(), 100)
     optimizer.step()
 
-def optimize_conv_model(game_name, memory, policy_net, target_net, optimizer):
+def optimize_conv_model(game_name, memory, policy_net, target_net, optimizer, optimizer_count):
     
     if len(memory) < BATCH_SIZE:
         print("not enough data in memory, passing")
@@ -205,10 +205,22 @@ def optimize_conv_model(game_name, memory, policy_net, target_net, optimizer):
         #need to reshape the non_final states but unlike the state batch theres no static size so need to figure out how many sample to make it and then reshape
         batch_cnt = int(non_final_next_states.shape[0] / 4)
         non_final_next_states_reshaped = non_final_next_states.view(batch_cnt, 4, 84, 84).to(device)
-        next_state_values[non_final_mask] = target_net(non_final_next_states_reshaped).max(1).values
+        with torch.no_grad():
+            next_state_values[non_final_mask] = target_net(non_final_next_states_reshaped).max(1).values
     # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch
-    
+
+    if((optimizer_count % 1000) == 0):
+        print(' --- ')
+        print("state_action_values: ")
+        print(state_action_values)
+        print("next_state_values: ")
+        print(next_state_values)
+
+        print("expected_state_action_values.unsqueeze(1): ")
+        print(expected_state_action_values.unsqueeze(1))
+        print(' --- ')
+
     # Compute Huber loss
     criterion = nn.MSELoss()
 

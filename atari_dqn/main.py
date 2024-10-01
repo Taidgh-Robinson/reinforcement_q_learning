@@ -7,6 +7,7 @@ import os
 from itertools import count
 import torch
 import torch.optim as optim
+import random
 
 from .models import DQN
 from common_files.objects import ReplayMemory
@@ -15,36 +16,6 @@ from common_files.variables import device, is_ipython, LR, REPLAY_MEMORY_SIZE, K
 from common_files.model_helper_functions import select_action_linearly, optimize_conv_model, preprocess_data_for_memory, save_training_information, clip_reward, load_training_info
 from common_files.h5_helper_functions import save_data_as_h5
 from common_files.framestack import FrameStack
-
-def run_game_random():
-    env = gym.make("ALE/SpaceInvaders-v5", render_mode="rgb_array")
-    env.reset() 
-    DONE = False
-    step = 0 
-    while not DONE:
-        env.action_space.sample()
-        plt.imshow(env.render())
-        display.display(plt.gcf())
-        display.clear_output(wait=True)
-        plt.savefig("data/" + str(step)+'.jpg')
-        state, reward, done, info, _ = env.step(env.action_space.sample())
-        DONE = done
-        print(str(step) + " REWARD: " + str(reward))
-        step += 1
-
-def create_gif_from_images(image_folder, gif_path, length):    
-    image_tags = [i for i in range(length)]
-    image_filenames = [str(i)+'.jpg' for i in image_tags]
-    # Create a list to store image objects
-    images = []
-    # Open each image and append it to the list
-    for filename in image_filenames:
-        image_path = os.path.join(image_folder, filename)
-        image = Image.open(image_path)
-        images.append(image)
-    
-    # Save the images as a GIF
-    images[0].save(gif_path, save_all=True, append_images=images[1:], duration=length//8, loop=0)
 
 def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t_frame_count, e_data, is_done):
     assert episodes_to_train % 100000 == 0, "Training steps must be a multiple of 100k, for reasons"
@@ -60,19 +31,24 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
     policy_net = DQN(n_actions).to(device)
     policy_net.load_state_dict(p_net)
 
-    target_net = DQN(n_actions).to(device)
+    target_net = DQN(n_actions).eval().to(device)
     target_net.load_state_dict(t_net)
 
     optimizer = optim.Adam(params=policy_net.parameters(), lr=0.00005)
     memory = mem
-
+    current_frames = 0
     steps_done = 0
     total_frame_count = t_frame_count + 1
     episode_durations = e_data if e_data is not None else []
     episode = 0
     num_episodes = total_frame_count + episodes_to_train
     total_reward = 0
-    loss = 0
+    losses = []
+    optimizer_count = 0 
+
+    best_model_score = min(max(episode_durations), 13)
+    print("BEST MODEL SCORE: ")
+    print(str(best_model_score))
     while total_frame_count < num_episodes:
         if episode != 0: 
             framestack.reset()
@@ -87,7 +63,7 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
             steps_done += 1
 
             observation, reward, terminated, truncated, _ = framestack.step(action.item())
-            reward = torch.tensor([clip_reward(reward)], device=device)
+            reward = torch.tensor([clip_reward(reward)], dtype=torch.float32, device=device)
             total_reward += reward 
             done = terminated or truncated
 
@@ -95,6 +71,14 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
                 next_state = None
             else:
                 next_state = torch.from_numpy(framestack.get_stack()).float().to(device)
+            
+            #Give a possitive reward for staying alive, the atari DQN paper doesnt do this but it wouldn't train if I didnt
+            if not terminated and not truncated: 
+                reward += 0.025
+                if((total_frame_count % 10000) == 0):
+                    print("ADDED VALUE TO REWARD")
+                    print(str(reward))
+
 
             # Store the transition in memory
             #We write the current state and next state's to files, and then we 
@@ -113,11 +97,14 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
             #We only do this on every kth step as per the paper
             # "More precisely, the agent sees and selects actions on every kth frame instead of every frame, and its last action is repeated on skipped frames"
             if(t % K == 0):
-                loss = optimize_conv_model(game_name, memory, policy_net, target_net, optimizer)
+                loss = optimize_conv_model(game_name, memory, policy_net, target_net, optimizer, optimizer_count)
+                optimizer_count += 1
+                if loss is not None:
+                    losses.append(loss)
 
             # DQN white paper doesnt use a soft update for the weights 
             # it just copies the weights from the policy net to the target net after 10,000 games have been played
-            if ((total_frame_count+1) % 50000) == 0:
+            if ((total_frame_count+1) % 10000) == 0:
                 print("GOING TO COPY POLICY NET TO TARGET NET ON TFC: " + str(total_frame_count))
                 target_net_state_dict = target_net.state_dict()
                 policy_net_state_dict = policy_net.state_dict()
@@ -134,14 +121,26 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
                 save_training_information(game_name, total_frame_count, memory, framestack, target_net, policy_net, episode_durations, done)
             
             total_frame_count+=1 
-
+            current_frames+=1
             if done:
                 print("FINISHED EPSISODE: " + str(episode))
+                print("TOTAL REWARD: " + str(total_reward))
+                print("FRAME COUNT: " + str(current_frames))
                 print("CURRENT STEP COUNT: " + str(total_frame_count))
-                print("MOST RECENT LOSS AT END OF EPISODE: " + str(loss))
-
+                print("AVERAGE LOSS OVER EPISODES: " + str(sum(losses)/ len(losses)))
+                print(" --- ")
+                losses = []
                 episode_durations.append(total_reward)
+                #If this was our best model lets save it to show it off
+                if(int(total_reward.cpu().numpy().item()) > best_model_score):
+                    print("This was our best model this run with a score of: " + str(int(total_reward.cpu().numpy().item())))
+                    path = 'atari_dqn/models/' +game_name+"/"+ str(int(total_reward.cpu().numpy().item()))+'-'+str(total_frame_count) + '/'
+                    os.makedirs(path, exist_ok=True)
+                    best_model_score = int(total_reward.cpu().numpy().item())
+                    torch.save(policy_net.state_dict(), path+'policy_net.pth')
+
                 total_reward = 0
+                current_frames = 0
                 episode += 1
                 break
 
@@ -166,18 +165,20 @@ def start_train(env, game_name):
     print("NUMBER OF ACTIONS: " + str(n_actions))
     framestack.reset()
     policy_net = DQN(n_actions).to(device)
-    target_net = DQN(n_actions).to(device)
+    target_net = DQN(n_actions).eval().to(device)
     
-    optimizer = optim.Adam(params=policy_net.parameters(), lr=0.00005)
+    optimizer = optim.Adam(params=policy_net.parameters(), lr=0.00025)
     memory = ReplayMemory(REPLAY_MEMORY_SIZE)
 
     steps_done = 0
     total_frame_count = 0 
     episode_durations = []
     episode = 0 
-    num_episodes = 200000-1
+    num_episodes = 500_000-1
     total_reward = 0
     losses = []
+    optimizer_count = 0 
+    current_frames = 0
     while total_frame_count < num_episodes:
         # Initialize the environment
         framestack.reset()
@@ -196,13 +197,17 @@ def start_train(env, game_name):
 
             observation, reward, terminated, truncated, _ = framestack.step(action.item())
             total_reward += clip_reward(reward)
-            reward = torch.tensor([clip_reward(reward)], device=device)
+            reward = torch.tensor([clip_reward(reward)], dtype=torch.float32, device=device)
             done = terminated or truncated
 
             if terminated:
                 next_state = None
             else:
                 next_state = torch.from_numpy(framestack.get_stack()).float().to(device)
+
+            #Give a possitive reward for staying alive, the atari DQN paper doesnt do this but it wouldn't train if I didnt
+            if not terminated and not truncated: 
+                reward += 0.025
 
             #store the transition in memory
             #We write the current state and next state's to files, and then we push pointers to those files to the replay memory
@@ -221,7 +226,8 @@ def start_train(env, game_name):
             #We only do this on every kth step as per the paper
             # "More precisely, the agent sees and selects actions on every kth frame instead of every frame, and its last action is repeated on skipped frames"
             if(t % K == 0):
-                loss = optimize_conv_model(game_name, memory, policy_net, target_net, optimizer)
+                loss = optimize_conv_model(game_name, memory, policy_net, target_net, optimizer, optimizer_count)
+                optimizer_count += 1
                 if loss is not None:
                     losses.append(loss)
 
@@ -231,11 +237,17 @@ def start_train(env, game_name):
                 print("GOING TO COPY POLICY NET TO TARGET NET ON TFC: " + str(total_frame_count))
                 target_net_state_dict = target_net.state_dict()
                 policy_net_state_dict = policy_net.state_dict()
+                random_key = random.choice(list(policy_net_state_dict.keys()))
+
+                print("RANDOM VALUE IN TARGET NET BEFORE TRANSFER: " + str(target_net_state_dict[random_key]))
+                print("RANDOM VALUE IN POLICY NET BEFORE TRANSFER: " + str(policy_net_state_dict[random_key]))
 
                 for key in policy_net_state_dict:
                     target_net_state_dict[key] = policy_net_state_dict[key]
                 
                 target_net.load_state_dict(target_net_state_dict)
+                target_net_state_dict_2 = target_net.state_dict()
+                print("RANDOM VALUE IN TARGET NET AFTER TRANSFER: " + str(target_net_state_dict_2[random_key]))
 
             #Save models every 100k frames
             #Do this because 100k % 4 = 0 and its a reasonable number thats 1/100th of our total
@@ -243,17 +255,20 @@ def start_train(env, game_name):
                 print("GOING TO SAVE MODEL")
                 save_training_information(game_name, total_frame_count, memory, framestack, target_net, policy_net, episode_durations, done)
             
-            total_frame_count+=1 
+            total_frame_count+=1
+            current_frames += 1
 
             if done:
                 print("FINISHED EPSISODE: " + str(episode))
                 print("TOTAL REWARD: " + str(total_reward))
+                print("FRAME COUNT: " + str(current_frames))
                 print("CURRENT STEP COUNT: " + str(total_frame_count))
                 print("AVERAGE LOSS OVER EPISODES: " + str(sum(losses)/ len(losses)))
                 print(" --- ")
                 losses = []
                 episode_durations.append(total_reward)
                 total_reward = 0
+                current_frames = 0
                 episode += 1
                 break
 
@@ -275,8 +290,8 @@ def start_train(env, game_name):
 #env = gym.make("ALE/Breakout-v5")
 #start_train(env, "Breakout")
 
-data = load_training_info("Breakout", 1199999)
-continue_training(500000, "Breakout", data[0], data[1], data[2], data[3], data[4], data[5], data[6])
+data = load_training_info("Breakout", 2_099_999)
+continue_training(500_000, "Breakout", data[0], data[1], data[2], data[3], data[4], data[5], data[6])
 
 def run_loaded_model_till_failure(env, game_name, iter_count, MODEL_NAME):
 
