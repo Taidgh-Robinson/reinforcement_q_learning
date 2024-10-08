@@ -46,7 +46,7 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
     losses = []
     optimizer_count = 0 
 
-    best_model_score = min(max(episode_durations), 13)
+    best_model_score = min(max(episode_durations), 16)
     print("BEST MODEL SCORE: ")
     print(str(best_model_score))
     while total_frame_count < num_episodes:
@@ -72,14 +72,6 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
             else:
                 next_state = torch.from_numpy(framestack.get_stack()).float().to(device)
             
-            #Give a possitive reward for staying alive, the atari DQN paper doesnt do this but it wouldn't train if I didnt
-            if not terminated and not truncated: 
-                reward += 0.025
-                if((total_frame_count % 10000) == 0):
-                    print("ADDED VALUE TO REWARD")
-                    print(str(reward))
-
-
             # Store the transition in memory
             #We write the current state and next state's to files, and then we 
             current_state_processed = preprocess_data_for_memory(current_state)
@@ -167,14 +159,14 @@ def start_train(env, game_name):
     policy_net = DQN(n_actions).to(device)
     target_net = DQN(n_actions).eval().to(device)
     
-    optimizer = optim.Adam(params=policy_net.parameters(), lr=0.00025)
+    optimizer = optim.Adam(params=policy_net.parameters(), lr=0.00005)
     memory = ReplayMemory(REPLAY_MEMORY_SIZE)
 
     steps_done = 0
     total_frame_count = 0 
     episode_durations = []
     episode = 0 
-    num_episodes = 500_000-1
+    num_episodes = 1_000_000-1
     total_reward = 0
     losses = []
     optimizer_count = 0 
@@ -204,10 +196,6 @@ def start_train(env, game_name):
                 next_state = None
             else:
                 next_state = torch.from_numpy(framestack.get_stack()).float().to(device)
-
-            #Give a possitive reward for staying alive, the atari DQN paper doesnt do this but it wouldn't train if I didnt
-            if not terminated and not truncated: 
-                reward += 0.025
 
             #store the transition in memory
             #We write the current state and next state's to files, and then we push pointers to those files to the replay memory
@@ -284,48 +272,11 @@ def start_train(env, game_name):
 #create_gif_from_images("C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data", "C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data\\gif8.gif", 320)
 #run_game_random()
 
-#env = gym.make("ALE/Breakout-v5")
+#env = gym.make("BreakoutDeterministic-v4")
 #train(env, 100000, 'Breakout')
 
 #env = gym.make("ALE/Breakout-v5")
-#start_train(env, "Breakout")
+#start_train(env, "BreakoutD")
 
-data = load_training_info("Breakout", 2_099_999)
-continue_training(500_000, "Breakout", data[0], data[1], data[2], data[3], data[4], data[5], data[6])
-
-def run_loaded_model_till_failure(env, game_name, iter_count, MODEL_NAME):
-
-    n_actions = env.action_space.n
-    # Get the number of state observations
-    state, info = env.reset()
-    n_observations = len(state)
-
-    network = DQN(n_actions)
-
-    network.load_state_dict(torch.load('atari_dqn/models/'+game_name+"/"+str(iter_count)+"/"+MODEL_NAME, map_location=torch.device('cpu')))
-    state = torch.tensor(state, dtype=torch.float32, device=device)
-
-    not_terminated = True
-    total_reward = 0
-    run_count = 0 
-    with torch.no_grad():
-        while not_terminated:
-            plt.imshow(env.render())
-            display.display(plt.gcf())
-            display.clear_output(wait=True)
-            plt.savefig("atari_dqn/data/"+MODEL_NAME+str(run_count)+'.jpg')
-
-            act = network(state)
-            max_index = torch.argmax(act).item()
-
-            observation, reward, terminated, truncated, _ = env.step(max_index)
-            next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
-            state = next_state
-            not_terminated = not terminated and not truncated
-            total_reward += reward
-            run_count += 1
-
-        print(total_reward)
-
-
-#run_loaded_model_till_failure(env, "Breakout", 499999, 'policy_net.pth')
+data = load_training_info("BreakoutD", 3_499_999)
+continue_training(300_000, "BreakoutD", data[0], data[1], data[2], data[3], data[4], data[5], data[6])
