@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 from IPython import display
 from PIL import Image
 import os
-
+import numpy as np
+import random
 from itertools import count
 import torch
 import torch.optim as optim
@@ -34,7 +35,7 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
     target_net = DQN(n_actions).eval().to(device)
     target_net.load_state_dict(t_net)
 
-    optimizer = optim.Adam(params=policy_net.parameters(), lr=0.00005)
+    optimizer = optim.Adam(params=policy_net.parameters(), lr=1e-4)
     memory = mem
     current_frames = 0
     steps_done = 0
@@ -46,7 +47,7 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
     losses = []
     optimizer_count = 0 
 
-    best_model_score = min(max(episode_durations), 16)
+    best_model_score = min(max(episode_durations), 10)
     print("BEST MODEL SCORE: ")
     print(str(best_model_score))
     while total_frame_count < num_episodes:
@@ -120,6 +121,7 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
                 print("FRAME COUNT: " + str(current_frames))
                 print("CURRENT STEP COUNT: " + str(total_frame_count))
                 print("AVERAGE LOSS OVER EPISODES: " + str(sum(losses)/ len(losses)))
+                print("MAX LOSS IN EPSIDE: " + str(max(losses)))
                 print(" --- ")
                 losses = []
                 episode_durations.append(total_reward)
@@ -159,7 +161,7 @@ def start_train(env, game_name):
     policy_net = DQN(n_actions).to(device)
     target_net = DQN(n_actions).eval().to(device)
     
-    optimizer = optim.Adam(params=policy_net.parameters(), lr=0.00005)
+    optimizer = optim.Adam(params=policy_net.parameters(), lr=1e-4)
     memory = ReplayMemory(REPLAY_MEMORY_SIZE)
 
     steps_done = 0
@@ -181,8 +183,8 @@ def start_train(env, game_name):
 
             current_state = torch.from_numpy(framestack.get_stack()).float().to(device)
 
-            #we select a new action every k steps, as per paper
-            if(t % K == 0):
+            #we select a new action every steps, as per paper
+            if(t%4 ==0):
                 action = select_action_linearly(total_frame_count, policy_net, framestack.env, current_state)
 
             steps_done += 1
@@ -225,17 +227,10 @@ def start_train(env, game_name):
                 print("GOING TO COPY POLICY NET TO TARGET NET ON TFC: " + str(total_frame_count))
                 target_net_state_dict = target_net.state_dict()
                 policy_net_state_dict = policy_net.state_dict()
-                random_key = random.choice(list(policy_net_state_dict.keys()))
-
-                print("RANDOM VALUE IN TARGET NET BEFORE TRANSFER: " + str(target_net_state_dict[random_key]))
-                print("RANDOM VALUE IN POLICY NET BEFORE TRANSFER: " + str(policy_net_state_dict[random_key]))
-
                 for key in policy_net_state_dict:
                     target_net_state_dict[key] = policy_net_state_dict[key]
                 
                 target_net.load_state_dict(target_net_state_dict)
-                target_net_state_dict_2 = target_net.state_dict()
-                print("RANDOM VALUE IN TARGET NET AFTER TRANSFER: " + str(target_net_state_dict_2[random_key]))
 
             #Save models every 100k frames
             #Do this because 100k % 4 = 0 and its a reasonable number thats 1/100th of our total
@@ -252,6 +247,7 @@ def start_train(env, game_name):
                 print("FRAME COUNT: " + str(current_frames))
                 print("CURRENT STEP COUNT: " + str(total_frame_count))
                 print("AVERAGE LOSS OVER EPISODES: " + str(sum(losses)/ len(losses)))
+                print("MAX LOSS IN EPSIDE: " + str(max(losses)))
                 print(" --- ")
                 losses = []
                 episode_durations.append(total_reward)
@@ -272,11 +268,14 @@ def start_train(env, game_name):
 #create_gif_from_images("C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data", "C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data\\gif8.gif", 320)
 #run_game_random()
 
-#env = gym.make("BreakoutDeterministic-v4")
+#env = gym.make("BreakoutNoFrameskip-v4", render_mode="rgb_array")
 #train(env, 100000, 'Breakout')
+torch.manual_seed(42)
+np.random.seed(42)
+random.seed(0)
 
 #env = gym.make("ALE/Breakout-v5")
-#start_train(env, "BreakoutD")
+#start_train(env, "PongD")
 
-data = load_training_info("BreakoutD", 3_499_999)
-continue_training(300_000, "BreakoutD", data[0], data[1], data[2], data[3], data[4], data[5], data[6])
+data = load_training_info("PongD", 2_999_999)
+continue_training(700_000, "PongD", data[0], data[1], data[2], data[3], data[4], data[5], data[6])
