@@ -35,7 +35,14 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
     target_net = DQN(n_actions).eval().to(device)
     target_net.load_state_dict(t_net)
 
-    optimizer = optim.Adam(params=policy_net.parameters(), lr=1e-4)
+    #For the first 5 million frames use my juiced learning rate, then use the paper learning rate. This helps us update a working m
+    if(t_frame_count >= 4_999_999):
+        print("Using paper learning rate")
+        optimizer = optim.Adam(params=policy_net.parameters(), lr=5e-5)
+    else:
+        print("Using juiced learning rate")
+        optimizer = optim.Adam(params=policy_net.parameters(), lr=1e-4)
+
     memory = mem
     current_frames = 0
     steps_done = 0
@@ -47,7 +54,7 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
     losses = []
     optimizer_count = 0 
 
-    best_model_score = min(max(episode_durations), 10)
+    best_model_score = min(max(episode_durations), 0)
     print("BEST MODEL SCORE: ")
     print(str(best_model_score))
     while total_frame_count < num_episodes:
@@ -268,14 +275,15 @@ def start_train(env, game_name):
 #create_gif_from_images("C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data", "C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data\\gif8.gif", 320)
 #run_game_random()
 
-#env = gym.make("BreakoutNoFrameskip-v4", render_mode="rgb_array")
 #train(env, 100000, 'Breakout')
 torch.manual_seed(42)
 np.random.seed(42)
 random.seed(0)
 
-#env = gym.make("ALE/Breakout-v5")
-#start_train(env, "PongD")
+env = gym.make("BreakoutNoFrameskip-v4", render_mode="rgb_array")
 
-data = load_training_info("PongD", 2_999_999)
-continue_training(700_000, "PongD", data[0], data[1], data[2], data[3], data[4], data[5], data[6])
+#env = gym.make("ALE/Breakout-v5")
+#start_train(env, "BreakoutD")
+
+data = load_training_info("BreakoutD", 2_999_999)
+continue_training(1_000_000, "BreakoutD", data[0], data[1], data[2], data[3], data[4], data[5], data[6])

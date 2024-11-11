@@ -86,9 +86,6 @@ def select_action_linearly(steps_done, policy_net, env, state):
     else: 
         eps_threshold = EPS_END
 
-    if(steps_done % 25000 == 0):
-        print("Steps done: " + str(steps_done))
-        print("Eps threshold: " + str(eps_threshold))
     if sample > eps_threshold:
         with torch.no_grad():
             # t.max(1) will return the largest column value of each row.
@@ -166,17 +163,11 @@ def optimize_conv_model(game_name, memory, policy_net, target_net, optimizer, op
         if(t.next_state is not None):
             next_state = load_data_from_h5(game_name, t.next_state, True)
             next_state = next_state
-        j = Transition(current_state, t.action, next_state, t.reward)
+        reshaped_transition = Transition(current_state, t.action, next_state, t.reward)
 
-        tranistions2.append(j)
-    # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-    # detailed explanation). This converts batch-array of Transitions
-    # to Transition of batch-arrays.
+        tranistions2.append(reshaped_transition)
+
     batch = Transition(*zip(*tranistions2))
-    
-
-    # Compute a mask of non-final states and concatenate the batch elements
-    # (a final state would've been the one after which simulation ended)
     
     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
                                           batch.next_state)), device=device, dtype=torch.bool)
@@ -188,15 +179,8 @@ def optimize_conv_model(game_name, memory, policy_net, target_net, optimizer, op
     action_batch = torch.stack([from_numpy(a) for a in batch.action]).to(device)
     reward_batch = torch.stack([from_numpy(r) for r in batch.reward]).to(device)
         
-    # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-    # columns of actions taken. These are the actions which would've been taken
-    # for each batch state according to policy_net
     state_action_values = policy_net(state_batch).gather(1, action_batch.squeeze(1))
-    # Compute V(s_{t+1}) for all next states.
-    # Expected values of actions for non_final_next_states are computed based
-    # on the "older" target_net; selecting their best reward with max(1).values
-    # This is merged based on the mask, such that we'll have either the expected
-    # state value or 0 in case the state was final.
+
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
 
     with torch.no_grad():
@@ -204,10 +188,9 @@ def optimize_conv_model(game_name, memory, policy_net, target_net, optimizer, op
         policy =  target_net(non_final_next_states).gather(1, non_final_actions.squeeze(1))
         next_state_values[non_final_mask] = policy.squeeze(1)
     
-    # Compute the expected Q values
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch.squeeze(1)
 
-    if((optimizer_count % 1000) == 0):
+    if(((optimizer_count % 100000) == 0)):
         print(' --- ')
         print("action batch:")
         print(action_batch.squeeze(1))
