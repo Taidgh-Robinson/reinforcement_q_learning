@@ -184,9 +184,7 @@ def optimize_conv_model(game_name, memory, policy_net, target_net, optimizer, op
     next_state_values = torch.zeros(BATCH_SIZE, device=device)
 
     with torch.no_grad():
-        non_final_actions = action_batch[non_final_mask]
-        policy =  target_net(non_final_next_states).gather(1, non_final_actions.squeeze(1))
-        next_state_values[non_final_mask] = policy.squeeze(1)
+        next_state_values[non_final_mask] = target_net(non_final_next_states).max(1).values
     
     expected_state_action_values = (next_state_values * GAMMA) + reward_batch.squeeze(1)
 
