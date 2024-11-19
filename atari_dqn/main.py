@@ -54,7 +54,7 @@ def continue_training(episodes_to_train, game_name, p_net, t_net, mem,f_stack, t
     losses = []
     optimizer_count = 0 
 
-    best_model_score = min(max(episode_durations), 0)
+    best_model_score = min(max(episode_durations), 17)
     print("BEST MODEL SCORE: ")
     print(str(best_model_score))
     while total_frame_count < num_episodes:
@@ -268,8 +268,6 @@ def start_train(env, game_name):
 
     print('Complete')
     plot_durations(episode_durations, is_ipython, show_result=False)
-    plt.ioff()
-    plt.savefig('plot.png', format='png')
 
 
 #create_gif_from_images("C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data", "C:\\Users\\taidg\\python\\ML\\DRL\\spaceinvaders\\data\\gif8.gif", 320)
@@ -285,5 +283,5 @@ env = gym.make("BreakoutNoFrameskip-v4", render_mode="rgb_array")
 #env = gym.make("ALE/Breakout-v5")
 #start_train(env, "BreakoutD")
 
-data = load_training_info("BreakoutD", 2_999_999)
+data = load_training_info("BreakoutD", 3_999_999)
 continue_training(1_000_000, "BreakoutD", data[0], data[1], data[2], data[3], data[4], data[5], data[6])
